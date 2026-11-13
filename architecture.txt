@@ -1,0 +1,4 @@
+Backbone : Swin Transformer
+Décodeur : Mask2Former
+
+On a une ensemble d'image assez réduit on va donc geler le backbone swim-T et entrainer seulement le Mask2Former.
