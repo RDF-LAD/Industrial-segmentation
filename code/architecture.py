@@ -100,10 +100,22 @@ class IndustrialFireSmokeSegmenter:
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         print("[Info] Entraînement terminé !")
 
-    def inference(self, image_path_or_pil, confidence_threshold=0.5):
+    def _thresholds_per_label(self, threshold):
+        """Normalise le seuil en dict {id de classe: seuil}. Accepte un float ou un dict {nom ou id: seuil}."""
+        if isinstance(threshold, (int, float)):
+            return {k: float(threshold) for k in self.id2label}
+        name2id = {v: k for k, v in self.id2label.items()}
+        out = {name2id[key] if key in name2id else key: float(val) for key, val in threshold.items()}
+        missing = set(self.id2label) - set(out)
+        if missing:
+            raise ValueError(f"Seuil manquant pour les classes : {[self.id2label[m] for m in missing]}")
+        return out
+
+    def inference(self, image_path_or_pil, confidence_threshold={'fire':0.34,'smoke':0.46}):
         """
         Action d'inférence sur une nouvelle image (détection du feu et de la fumée).
-        Renvoie les segments, les boîtes et les scores de confiance.
+        confidence_threshold : float (seuil unique) ou dict {nom de classe: seuil}, ex {"fire": 0.4, "smoke": 0.6}.
+        Renvoie 'segmentation' (carte d'ids, -1 = fond) et 'segments_info' (classe et score de chaque instance).
         """
         self.model.eval()
 
@@ -121,12 +133,21 @@ class IndustrialFireSmokeSegmenter:
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        # Post-traitement spécifique pour la segmentation d'instances
+        # Le post-traitement n'accepte qu'un seuil scalaire : on utilise le plus bas des seuils par classe...
+        thr_per_label = self._thresholds_per_label(confidence_threshold)
         result = self.processor.post_process_instance_segmentation(
             outputs,
             target_sizes=[original_size],
-            threshold=confidence_threshold
+            threshold=min(thr_per_label.values())
         )[0]
 
-        # Résultat contient : 'segmentation' (masques), 'segments_info' (classes et scores)
+        # ... puis on retire les instances sous le seuil de leur propre classe, y compris de la carte de segmentation
+        segmentation, kept = result["segmentation"], []
+        for seg_info in result["segments_info"]:
+            if seg_info["score"] >= thr_per_label[seg_info["label_id"]]:
+                kept.append(seg_info)
+            else:
+                segmentation[segmentation == seg_info["id"]] = -1
+        result["segments_info"] = kept
+
         return result

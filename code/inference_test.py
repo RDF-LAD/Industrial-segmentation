@@ -51,11 +51,11 @@ if __name__ == "__main__":
 
     # Load trained model
     model = IndustrialFireSmokeSegmenter(checkpoint_path=
-                                         r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\results\checkpoint-17625')
+                                         r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\results\checkpoint-3525')
 
     # test image inference
-    img_pth = r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\data\Fire and Smoke Segmentation.v10-rfdetr-xl.coco-segmentation\bonus\img1.webp'
-    r1 = model.inference(img_pth, confidence_threshold=0.5)
+    img_pth = r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\data\Fire and Smoke Segmentation.v10-rfdetr-xl.coco-segmentation\bonus\test12.jpg'
+    r1 = model.inference(img_pth)
 
     print(f"{len(r1['segments_info'])} instance(s) détectée(s) :")
     for s in r1["segments_info"]:
