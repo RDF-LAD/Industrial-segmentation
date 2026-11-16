@@ -11,9 +11,9 @@ from architecture import IndustrialFireSmokeSegmenter
 from validation_checkpoint import RESULTS_DIR, VALID_DIR, ground_truth, load_valid, per_class, predict
 from validation_threshold import DEFAULT_CHECKPOINT, IOU_MATCH, match_image
 
-# ----------------------------- Configuration -----------------------------
-TEST_DIR = os.path.join(os.path.dirname(VALID_DIR), "test")  # dossier frère de "valid" ; adapte si besoin
-# --------------------------------------------------------------------------
+# find test set a coté de valid
+TEST_DIR = os.path.join(os.path.dirname(VALID_DIR), "test")  
+
 
 
 def prf(tp, fp, fn):
@@ -24,7 +24,7 @@ def prf(tp, fp, fn):
 
 
 def resolve_thresholds(args, id2label):
-    """Seuils par classe : soit donnés à la main (--thresholds fire=0.4 ...), soit lus dans le JSON de tune_threshold."""
+    """Seuils par classe"""
     name2id = {v: k for k, v in id2label.items()}
     if args.thresholds:
         by_name = {kv.split("=")[0]: float(kv.split("=")[1]) for kv in args.thresholds}

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 class CocoInstanceDataset(Dataset):
     """
-    Dataset d'instance segmentation au format COCO (polygones), prêt pour Mask2Former.
+    Dataset d'instance segmentation au format COCO
 
     Chaque item contient :
       - pixel_values : (3, H, W) float, prétraité par le processor
@@ -34,9 +34,8 @@ class CocoInstanceDataset(Dataset):
             self.anns[a["image_id"]].append(a)
 
         # Mapping id COCO -> indice de classe contigu (0..K-1).
-        # Roboflow ajoute une catégorie "parent" (id 0, ici "fire-smoke") sans aucune annotation :
-        # on ne garde que les catégories réellement utilisées.
-        # Pour un jeu de validation, passer le cat2label du train pour garder les mêmes indices.
+        # Roboflow ajoute une catégorie "parent" (id 0, ici "fire-smoke") sans aucune annotation on l'enlève
+        # Pour validation set, passer le cat2label du train pour garder les mêmes indices.
         names = {c["id"]: c["name"] for c in coco["categories"]}
         if cat2label is None:
             used = sorted({a["category_id"] for a in coco["annotations"]})
@@ -50,7 +49,7 @@ class CocoInstanceDataset(Dataset):
     def _polygons_to_mask(self, segmentation, w, h):
         mask = Image.new("L", (w, h), 0)
         draw = ImageDraw.Draw(mask)
-        for poly in segmentation:  # une annotation peut avoir plusieurs polygones
+        for poly in segmentation:  # une annotation peut avoir plusieurs polygones différents
             if len(poly) >= 6:  # au moins 3 points
                 draw.polygon(poly, outline=1, fill=1)
         return np.array(mask, dtype=np.uint8)
@@ -63,14 +62,14 @@ class CocoInstanceDataset(Dataset):
         masks, labels = [], []
         for a in self.anns.get(info["id"], []):
             seg = a["segmentation"]
-            if a.get("iscrowd", 0) or not isinstance(seg, list):  # RLE non géré ici
+            if a.get("iscrowd", 0) or not isinstance(seg, list):  
                 continue
-            if a["category_id"] not in self.cat2label:
+            if a["category_id"] not in self.cat2label: # on skip les cats non gérés
                 continue
             masks.append(self._polygons_to_mask(seg, w, h))
             labels.append(self.cat2label[a["category_id"]])
 
-        # Même prétraitement que celui utilisé à l'inférence (resize + normalisation)
+        # Même prétraitement que celui utilisé à l'inférence
         pixel_values = self.processor(images=image, return_tensors="pt")["pixel_values"][0]
         H, W = pixel_values.shape[-2:]
 
@@ -90,8 +89,9 @@ class CocoInstanceDataset(Dataset):
 
 
 def mask2former_collate_fn(batch):
-    """Les images ont la même taille après prétraitement : on empile directement.
-    class_labels / mask_labels restent des listes (nombre d'instances variable par image)."""
+    """
+    class_labels / mask_labels restent des listes (nombre d'instances variable).
+    """
     return {
         "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
         "pixel_mask": torch.stack([b["pixel_mask"] for b in batch]),

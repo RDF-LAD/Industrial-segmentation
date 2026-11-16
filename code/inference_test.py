@@ -6,7 +6,7 @@ import torch
 import cv2
 import matplotlib.pyplot as plt
 
-# Couleurs RGB par nom de classe (celles de id2label) ; couleur par défaut pour une autre classe
+# Couleurs RGB par nom de classe 
 COLORS = {
     "fire": (255, 60, 0),
     "smoke": (40, 120, 255),
@@ -16,9 +16,9 @@ DEFAULT_COLOR = (0, 200, 0)
 
 def overlay_segmentation(img_rgb, result, id2label, alpha=0.5):
     """
-    Superpose les instances prédites sur l'image (remplissage translucide, contour, étiquette + score).
-    img_rgb : image (H, W, 3) uint8 en RGB
-    result  : sortie de post_process_instance_segmentation (dict 'segmentation' + 'segments_info')
+    Superpose les instances prédites sur l'image.
+    img_rgb : image (H, W, 3)
+    result  : sortie de post_process_instance_segmentation (dict avec 'segmentation' + 'segments_info')
     """
     seg = result["segmentation"].cpu().numpy()  # (H, W), chaque pixel = id d'instance, -1 si aucune
     fill = img_rgb.copy()

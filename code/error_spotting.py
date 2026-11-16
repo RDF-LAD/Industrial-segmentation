@@ -33,8 +33,6 @@ DEFAULT_COLOR = (0, 200, 0)
 def analyse_image(pred, gt_masks, gt_labels, thr, class_ids):
     """
     Applique les seuils par classe, puis apparie prédictions et annotations (par classe, score décroissant).
-    Renvoie les prédictions conservées et leurs statuts : pred_tp (True = bien détectée) et
-    gt_matched (True = annotation retrouvée).
     """
     keep = torch.tensor([float(s) >= thr[int(l)] for s, l in zip(pred["scores"], pred["labels"])], dtype=torch.bool)
     p_masks, p_labels, p_scores = pred["masks"][keep], pred["labels"][keep], pred["scores"][keep]
@@ -57,8 +55,7 @@ def analyse_image(pred, gt_masks, gt_labels, thr, class_ids):
 
 
 def draw_instances(img_rgb, masks, labels, id2label, texts, is_error, alpha=0.5):
-    """Superpose des instances (masques booléens numpy) : remplissage translucide, contour, texte.
-    Les instances en erreur ont un contour blanc épais."""
+    """Superpose des instances avec instances en erreur ont contour blanc épais."""
     fill = img_rgb.copy()
     colors = [COLORS.get(id2label[int(l)], DEFAULT_COLOR) for l in labels]
     for m, col in zip(masks, colors):

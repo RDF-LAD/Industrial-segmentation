@@ -13,16 +13,16 @@ from torchmetrics.detection import MeanAveragePrecision
 
 from architecture import IndustrialFireSmokeSegmenter
 
-# ----------------------------- Configuration -----------------------------
+# working directories
 RESULTS_DIR = r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\results'
 VALID_DIR = (r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\data'
              r'\Fire and Smoke Segmentation.v10-rfdetr-xl.coco-segmentation\valid')
-ANN_FILE = os.path.join(VALID_DIR, "_annotations.coco.json")  # adapte si le nom du fichier diffère
+ANN_FILE = os.path.join(VALID_DIR, "_annotations.coco.json") 
 
-TOPK = 100          # nombre max de prédictions par image (couples requête/classe)
-MIN_SCORE = 0.01    # on écarte les prédictions au score négligeable (accélère l'évaluation)
-MASK_THRESHOLD = 0.5  # binarisation des masques prédits
-# --------------------------------------------------------------------------
+TOPK = 100          # nombre max de prédictions par image 
+MIN_SCORE = 0.01    # score negligeable
+MASK_THRESHOLD = 0.5  # binarisation des masques prédits > / < 0.5
+
 
 
 def list_checkpoints(results_dir):
@@ -32,7 +32,7 @@ def list_checkpoints(results_dir):
 
 
 def load_valid(ann_file, name2label):
-    """Lit le COCO de validation. Les classes sont mises en correspondance par NOM avec celles du modèle."""
+    """Lit le COCO de validation"""
     with open(ann_file, "r", encoding="utf-8") as f:
         coco = json.load(f)
     cat2label = {c["id"]: name2label[c["name"]] for c in coco["categories"] if c["name"] in name2label}
@@ -43,7 +43,7 @@ def load_valid(ann_file, name2label):
 
 
 def ground_truth(info, anns, cat2label, img_dir):
-    """Image PIL + masques binaires (N, H, W) à la résolution d'origine + labels (N,)."""
+    """Image PIL + masques binaires (N, H, W) + labels (N,)."""
     image = Image.open(os.path.join(img_dir, info["file_name"])).convert("RGB")
     w, h = image.size
     masks, labels = [], []
@@ -66,16 +66,15 @@ def ground_truth(info, anns, cat2label, img_dir):
 @torch.no_grad()
 def predict(segmenter, image):
     """
-    Prédictions d'instances sans résolution de chevauchements (feu et fumée peuvent se superposer),
-    selon la procédure d'inférence d'instances de Mask2Former :
-    top-K sur les couples (requête, classe), score = proba de classe * confiance moyenne du masque.
+    Prédictions d'instances sans résolution de chevauchements 
+    score = proba de classe * confiance moyenne du masque.
     Les logits de masque (1/4 de résolution) sont interpolés directement à la taille d'origine.
     """
     w, h = image.size
     inputs = segmenter.processor(images=image, return_tensors="pt").to(segmenter.device)
     out = segmenter.model(**inputs)
 
-    class_probs = out.class_queries_logits[0].softmax(-1)[:, :-1]  # (Q, K) sans la classe "no object"
+    class_probs = out.class_queries_logits[0].softmax(-1)[:, :-1]  # (Q, K) 
     mask_logits = out.masks_queries_logits[0]                      # (Q, h/4, w/4)
     num_classes = class_probs.shape[1]
 
@@ -123,7 +122,6 @@ def main():
     print(f"{len(images)} images de validation | classes : {id2label}")
 
     # Deux métriques par checkpoint : COCO mAP (0.5:0.95) et AP à IoU = 0.5 uniquement
-    # (torchmetrics ne donne pas l'AP50 par classe avec les seuils par défaut)
     m_coco = [MeanAveragePrecision(iou_type="segm", class_metrics=True) for _ in ckpts]
     m_50 = [MeanAveragePrecision(iou_type="segm", iou_thresholds=[0.5], class_metrics=True) for _ in ckpts]
 

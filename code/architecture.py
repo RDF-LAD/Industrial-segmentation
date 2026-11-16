@@ -18,26 +18,23 @@ class IndustrialFireSmokeSegmenter:
         """
         Initialise le processeur, le modèle Mask2Former et gère le gel du backbone.
 
-        checkpoint_path (optionnel) :
-          - dossier de checkpoint (ex: "./results/checkpoint-17625") contenant config.json
-            et model.safetensors : le modèle est reconstruit depuis ce dossier, id2label
-            et nombre de classes compris (l'argument id2label n'est alors pas utilisé) ;
-          - ou chemin direct vers un fichier .safetensors : l'architecture est construite
-            depuis model_id + id2label, puis les poids du fichier sont chargés dedans.
+        checkpoint_path :
+          - dossier de checkpoint contenant config.json
+            et model.safetensors 
         Si checkpoint_path est None : initialisation depuis les poids COCO de model_id
         (tête de classification réinitialisée pour id2label).
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if checkpoint_path and os.path.isdir(checkpoint_path):
-            # Poids fine-tunés : config.json du checkpoint fait foi (id2label inclus)
+            # Poids fine-tunés
             self.model = Mask2FormerForUniversalSegmentation.from_pretrained(checkpoint_path)
             has_proc = os.path.exists(os.path.join(checkpoint_path, "preprocessor_config.json"))
             self.processor = Mask2FormerImageProcessor.from_pretrained(checkpoint_path if has_proc else model_id)
             print(f"[Info] Modèle chargé depuis le checkpoint : {checkpoint_path}")
         else:
             if id2label is None:
-                raise ValueError("id2label est requis si aucun dossier de checkpoint n'est fourni.")
+                raise ValueError("id2label est requis.")
             self.processor = Mask2FormerImageProcessor.from_pretrained(model_id)
             self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
                 model_id,
@@ -51,11 +48,11 @@ class IndustrialFireSmokeSegmenter:
                 print(f"[Info] Poids chargés depuis {checkpoint_path} "
                       f"(clés manquantes : {len(missing)}, inattendues : {len(unexpected)})")
                 if missing or unexpected:
-                    print("[Attention] Vérifie que le fichier correspond bien à cette architecture et à ces classes.")
+                    print("Incohérence classes.")
 
         self.id2label = self.model.config.id2label
 
-        # Geler le backbone Swin-T si demandé (recommandé avec un petit dataset)
+        # Geler le backbone Swin-T si besoin
         if freeze_backbone:
             for param in self.model.model.pixel_level_module.encoder.parameters():
                 param.requires_grad = False
@@ -68,9 +65,7 @@ class IndustrialFireSmokeSegmenter:
     def train(self, train_dataset, val_dataset=None, output_dir="./results", epochs=5, batch_size=2, lr=1e-4,
               resume_from_checkpoint=None):
         """
-        Action d'entraînement (Fine-Tuning) du modèle.
         resume_from_checkpoint : dossier de checkpoint pour reprendre exactement le run
-        (optimiseur, scheduler, RNG) ; différent du simple chargement des poids ci-dessus.
         """
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -81,7 +76,7 @@ class IndustrialFireSmokeSegmenter:
             logging_steps=10,
             save_strategy="epoch",
             eval_strategy="epoch" if val_dataset else "no",
-            remove_unused_columns=False,  # Indispensable pour que le Trainer ne supprime pas les masques d'annotation
+            remove_unused_columns=False,  # Indispensable sinon bug avec masques
             fp16=torch.cuda.is_available(),
             report_to="none",
             prediction_loss_only=True
@@ -100,8 +95,7 @@ class IndustrialFireSmokeSegmenter:
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         print("[Info] Entraînement terminé !")
 
-    def _thresholds_per_label(self, threshold):
-        """Normalise le seuil en dict {id de classe: seuil}. Accepte un float ou un dict {nom ou id: seuil}."""
+    def _thresholds_per_label(self, threshold): 
         if isinstance(threshold, (int, float)):
             return {k: float(threshold) for k in self.id2label}
         name2id = {v: k for k, v in self.id2label.items()}
@@ -113,9 +107,8 @@ class IndustrialFireSmokeSegmenter:
 
     def inference(self, image_path_or_pil, confidence_threshold={'fire':0.34,'smoke':0.46}):
         """
-        Action d'inférence sur une nouvelle image (détection du feu et de la fumée).
-        confidence_threshold : float (seuil unique) ou dict {nom de classe: seuil}, ex {"fire": 0.4, "smoke": 0.6}.
-        Renvoie 'segmentation' (carte d'ids, -1 = fond) et 'segments_info' (classe et score de chaque instance).
+        confidence_threshold : float ou dict {nom de classe: seuil}
+        Renvoie  un dict avec 'segmentation' (carte d'ids, -1 = fond) et 'segments_info' (classe et score de chaque instance).
         """
         self.model.eval()
 
@@ -133,7 +126,7 @@ class IndustrialFireSmokeSegmenter:
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        # Le post-traitement n'accepte qu'un seuil scalaire : on utilise le plus bas des seuils par classe...
+        # Le post-traitement n'accepte qu'un seuil scalaire : on utilise le plus bas des seuils par classe d'abord
         thr_per_label = self._thresholds_per_label(confidence_threshold)
         result = self.processor.post_process_instance_segmentation(
             outputs,
@@ -141,7 +134,7 @@ class IndustrialFireSmokeSegmenter:
             threshold=min(thr_per_label.values())
         )[0]
 
-        # ... puis on retire les instances sous le seuil de leur propre classe, y compris de la carte de segmentation
+        # on verifie le threshold de tous
         segmentation, kept = result["segmentation"], []
         for seg_info in result["segments_info"]:
             if seg_info["score"] >= thr_per_label[seg_info["label_id"]]:

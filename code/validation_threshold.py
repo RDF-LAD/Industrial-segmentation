@@ -10,16 +10,16 @@ import torch
 from architecture import IndustrialFireSmokeSegmenter
 from validation_checkpoint import ANN_FILE, RESULTS_DIR, VALID_DIR, ground_truth, load_valid, predict
 
-# ----------------------------- Configuration -----------------------------
+# directories
 DEFAULT_CHECKPOINT = r'C:\Users\User\Documents\projets_persos_polimi\Segmentation\results\checkpoint-3525'
-IOU_MATCH = 0.5          # IoU minimal pour qu'une prédiction compte comme détection correcte (TP)
-TARGET_RECALL = 0.90     # rappel visé pour le seuil "sécurité" (rater un feu coûte cher)
+IOU_MATCH = 0.5          # IoU minimal pour qu'une prédiction compte comme détection 
+TARGET_RECALL = 0.90     # rappel visé 
 THRESHOLDS = np.round(np.arange(0.05, 0.96, 0.01), 2)
-# --------------------------------------------------------------------------
+
 
 
 def mask_iou(pred, gt):
-    """IoU entre masques binaires : pred (P, H, W), gt (G, H, W) -> (P, G)."""
+    """IoU entre masques binaires."""
     p, g = pred.flatten(1).float(), gt.flatten(1).float()
     inter = p @ g.T
     union = p.sum(1)[:, None] + g.sum(1)[None, :] - inter
@@ -56,7 +56,7 @@ def match_image(pred, gt_masks, gt_labels, class_ids, records, n_gt):
 
 
 def curves(scores, is_tp, n_gt, thresholds):
-    """Précision, rappel et F1 pour chaque seuil. Précision = nan si aucune prédiction n'est conservée."""
+    """Précision, rappel et F1 pour chaque seuil"""
     prec, rec, f1 = [], [], []
     for t in thresholds:
         keep = scores >= t
@@ -105,7 +105,7 @@ def main():
         if i % 50 == 0 or i == len(images):
             print(f"  {i}/{len(images)} images traitées")
 
-    # Courbes par classe, puis globales (micro : on cumule TP/FP/FN de toutes les classes)
+    # Courbes par classe, puis globales
     results, all_scores, all_tp = {}, [], []
     for c in class_ids:
         s = np.concatenate([r[0] for r in records[c]]) if records[c] else np.zeros(0)
